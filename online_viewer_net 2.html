@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NutriPet 健食隨身寶</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:monospace,sans-serif}
+body{background:#0f172a;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:10px}
+.tamagotchi{background:#f0e68c;border:8px solid #d4c85d;border-radius:35px;padding:16px;width:100%;max-width:390px;box-shadow:0 15px 30px #0008}
+.screen{background:#e8efe6;border:4px solid #b2c4af;border-radius:14px;padding:14px;min-height:490px;color:#2d4028;display:flex;flex-direction:column;justify-content:space-between}
+.card{background:#d3ded0;border:2px solid #5c7356;border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px}
+.card-title{font-weight:bold;border-bottom:1px solid #5c7356;padding-bottom:5px;margin-bottom:7px;font-size:12px}
+input,select{width:100%;padding:8px;margin:4px 0 8px;border:1px solid #5c7356;border-radius:4px;background:#fff;font-size:12px;color:#2d4028;outline:none}
+button{background:#3d5238;color:#e8efe6;border:1px solid #2d4028;border-radius:6px;padding:9px;width:100%;font-weight:bold;cursor:pointer;font-size:12px;margin-top:4px}
+button:active{transform:scale(.98)}
+button:disabled{background:#94a3b8;color:#475569}
+.nav{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;border-top:1px solid #5c7356;padding-top:8px;margin-top:4px}
+.nav button{font-size:9px;padding:7px 1px;background:#d3ded0;color:#2d4028;border:1px solid #5c7356;margin:0}
+.nav button.active{background:#3d5238;color:#fff}
+.flex-between{display:flex;justify-content:space-between;align-items:center;gap:5px}
+.text-center{text-align:center}
+.pet-avatar{display:inline-block;width:90px;height:90px;background:#c3d4c0;border:2px solid #5c7356;border-radius:12px;padding:5px;margin:5px}
+.pet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:5px}
+.pet-choice{cursor:pointer;text-align:center;padding:5px;border:1px solid #5c7356;border-radius:6px;background:#e8efe6}
+.pet-choice.selected{background:#3d5238;color:white}
+.pet-choice svg{width:48px;height:48px}
+.progress{height:12px;background:#fff;border:1px solid #5c7356;border-radius:10px;overflow:hidden;margin:5px 0}
+.progress>div{height:100%;background:#6b9b65;transition:width .4s}
+.small{font-size:10px;line-height:1.5}
+.muted{opacity:.7}
+.good{color:#166534;font-weight:bold}
+.bad{color:#991b1b;font-weight:bold}
+.pet-room{position:relative;height:125px;background:#c3d4c0;border:2px solid #5c7356;border-radius:8px;overflow:hidden;display:flex;justify-content:center;align-items:flex-end;padding-bottom:13px;margin-bottom:7px}
+.ground{position:absolute;left:0;right:0;bottom:8px;height:2px;background:#5c7356;opacity:.5}
+.pet-walker{position:relative;animation:wander 10s steps(14) infinite}
+.pet-bob{animation:bob .8s infinite}
+.paused{animation-play-state:paused!important}
+@keyframes wander{0%{transform:translateX(-65px)}40%{transform:translateX(65px)}50%{transform:translateX(65px)}90%{transform:translateX(-65px)}100%{transform:translateX(-65px)}}
+@keyframes bob{0%,49%{transform:translateY(0)}50%,100%{transform:translateY(-3px)}}
+.sprite{position:relative;transform-origin:50% 100%;transition:transform .3s}
+.sprite.chewing{animation:chewbody .5s infinite}
+.sprite.gulp{animation:gulp .6s steps(2) 1}
+@keyframes chewbody{0%,49%{transform:scale(1)}50%,100%{transform:scale(1.06,.93)}}
+@keyframes gulp{0%{transform:scale(1)}50%{transform:scale(.92,1.1)}100%{transform:scale(1)}}
+.mouth{position:absolute;left:50%;margin-left:-5px;width:10px;height:3px;background:#3a2430;z-index:2;border-radius:50%}
+.mouth.open{height:8px}
+.mouth.chew{animation:chewmouth .5s infinite}
+@keyframes chewmouth{0%,49%{height:3px}50%,100%{height:9px}}
+.food{display:none;position:absolute;left:50%;margin-left:-11px;width:22px;height:22px;z-index:3}
+.food.fall{display:block;animation:fall .8s steps(6) forwards}
+@keyframes fall{from{top:-30px}to{top:55px}}
+.pop{position:absolute;left:50%;top:-6px;transform:translateX(-50%);font-size:11px;font-weight:bold;color:#b91c1c;opacity:0;white-space:nowrap}
+.pop.show{animation:popup 1s steps(6) forwards}
+@keyframes popup{0%{opacity:1;top:-6px}100%{opacity:0;top:-30px}}
+.photo-preview{width:100%;max-height:180px;object-fit:contain;border:1px solid #5c7356;border-radius:6px;background:#fff;margin:5px 0}
+.food-option{display:flex;align-items:center;justify-content:space-between;gap:5px;padding:7px;margin:4px 0;background:#edf3eb;border:1px solid #9bad96;border-radius:5px;font-size:11px}
+.food-option button{width:auto;margin:0;padding:6px 9px}
+table{width:100%;border-collapse:collapse;font-size:10px;text-align:center}
+th,td{border:1px solid #8b9c86;padding:5px 2px}
+th{background:#b9cbb4}
+.week-table{overflow-x:auto}
+.stage-label{display:inline-block;padding:4px 9px;background:#e8efe6;border:1px solid #5c7356;border-radius:20px;font-size:10px;font-weight:bold;margin:3px}
+.evolution-note{background:#edf3eb;border:1px dashed #789071;border-radius:6px;padding:7px;font-size:10px;line-height:1.5;margin-top:6px}
+.upload-label{display:block;position:relative;overflow:hidden;background:#3d5238;color:white;border-radius:6px;padding:13px;cursor:pointer;font-weight:bold;font-size:12px;margin-top:5px;text-align:center;border:1px solid #2d4028}
+.upload-label:active{opacity:.8}
+.upload-label input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;padding:0}
+.confidence-bar{height:7px;background:#fff;border:1px solid #9bad96;border-radius:8px;overflow:hidden;margin-top:4px}
+.confidence-bar div{height:100%;background:#6b9b65}
+.upload-status{font-size:10px;margin-top:6px;line-height:1.5}
+</style>
+</head>
+
+<body>
+<div class="tamagotchi">
+<div class="screen" id="app"></div>
+</div>
+
+<script>
+
+/* =========================
+   1. 遊戲資料
+========================= */
+
+var state={
+ step:1,email:'',
+ profile:{
+  name:'PLAYER 1',height:165,weight:60,currentWeight:60,
+  startWeight:60,targetWeight:54,age:20,
+  exercise:'1-3',goal:'loss',pet:'Hamster',bestProgress:0
+ },
+ tab:'home',
+ water:750,waterRewarded:false,
+ mealType:'breakfast',meals:[],
+ stars:3,exp:1,day:1,stamped:false,
+ previewImg:null,scanResult:null,candidates:[],
+ portion:1,eating:false,weightLog:[],
+ aiStatus:'未載入模型',aiError:''
+};
+
+var PET_DATA={
+ Hamster:{
+  name:'小倉鼠',
+  pal:["#4d4655","#927d86","#7e616b","#a08677","#daa5af","#e7c099","#b59375","#010000","#fcf7f0","#d0c9ce","#b09296","#dbc1b8","#c1b09f"],
+  g:[".00000..........00000.","11123311......11112111","04415500......00551440","0444150000000000514440","0664165556666555614630","0364665556666555664630","...0555555665555550...",".00655555555555555600.",".00655555555555555600.","0665557755555577555660","0555555558888555555550","0555555558888555555550","0888555588448855558880","09988888a8888688888990",".009888881aa188888900.",".00009888888888890000.",".0000b8888888888b0000.",".00555889999998855500.","0665558888888888555660","066555508888880c555660","0665550088888800555660","05550b55088880b5505550","0555056b088880b6505550","0555800088888800085550","0555888888888888885550","0555888888888888885550","0665559988888899555660","0365559988888899555630",".005bb0000000000bb500.","..044b2000000002b440..","...000..........000..."]
+ },
+ Cat:{name:'小貓',pal:["#68615b","#b2a9a2","#928982","#494556","#c0959c","#ebe7de"],g:["..0......0..",".010....010.",".0000000000.","012111111210","011311113110","011111111110","011114411110",".0115555110.",".0000000000.","012155551210","012155551210","012155551210","011155551110","011155551110","05550..05550","00000..00000"]},
+ Dog:{name:'小狗',pal:["#735d4a","#9a7d5f","#c8a881","#4b4356","#f0e9d9"],g:["..0000000000..","10222222222201","10223222232201","10224444442201","10224433442201","..0224444220..","..0000000000..",".021244442120.",".021244442120.",".021244442120.",".022244442220.",".022244442220.",".04440..04440.",".00000..00000."]},
+ Bunny:{name:'小兔',pal:["#7a746e","#e1ded9","#ddbac0","#494456","#cea3a8","#fbf6f2","#c2bdb7"],g:["..00....00..",".0120..0210.",".0120..0210.",".0000000000.","011111111110","011311113110","011111111110","011114411110",".0115555110.",".0000000000.","016155551610","016155551610","016155551610","011155551110","011155551110","05550..05550","00000..00000"]},
+ Fox:{name:'狐狸',pal:["#845c45","#bf815d","#d99d74","#4c4355","#f6ede3"],g:["..0......0..",".010....010.",".0210..0120.",".0000000000.","022222222220","022322223220","022244442220","024443344420",".0224444220.",".0000000000.","021244442120","021244442120","021244442120","022244442220","022244442220","04440..04440","00000..00000"]}
+};
+
+function svgOf(p){
+ var rows=p.g,r='';
+ for(var y=0;y<rows.length;y++){
+  var x=0;
+  while(x<rows[y].length){
+   var c=rows[y].charAt(x);
+   if(c==='.'){x++;continue}
+   var s=x;
+   while(x<rows[y].length&&rows[y].charAt(x)===c)x++;
+   r+='<rect x="'+s+'" y="'+y+'" width="'+(x-s)+'" height="1" fill="'+p.pal[parseInt(c,36)]+'"/>';
+  }
+ }
+ return '<svg viewBox="0 0 '+rows[0].length+' '+rows.length+'" width="100%" height="100%" shape-rendering="crispEdges">'+r+'</svg>';
+}
+
+var PIXEL_PETS={};
+Object.keys(PET_DATA).forEach(function(k){
+ PIXEL_PETS[k]={name:PET_DATA[k].name,svg:svgOf(PET_DATA[k])};
+});
+
+/* =========================
+   2. 寵物成長系統
+========================= */
+
+function rawProgress(){
+ var p=state.profile;
+ var start=Number(p.startWeight||p.weight);
+ var current=Number(p.currentWeight||p.weight);
+ var target=Number(p.targetWeight);
+ var total=Math.abs(start-target);
+ if(total<0.01)return 100;
+ var remaining=Math.abs(current-target);
+ return Math.max(0,Math.min(100,((total-remaining)/total)*100));
+}
+function goalProgress(){return Math.max(Number(state.profile.bestProgress||0),rawProgress())}
+function petStage(){var n=goalProgress();if(n>=70)return 2;if(n>=30)return 1;return 0}
+function stageName(){return ['幼幼態','成長態','完全體'][petStage()]}
+function stageDescription(){
+ return ['寵物仲係 BB，努力陪你開始健康生活！','寵物長大咗！你嘅努力已經慢慢見到成果。','寵物進化成功！繼續保持健康習慣！'][petStage()];
+}
+function petSVG(){
+ var key=state.profile.pet;
+ var base=PIXEL_PETS[key]||PIXEL_PETS.Hamster;
+ var stage=petStage(),decoration='';
+ if(stage===0)decoration='<span style="position:absolute;top:-8px;left:45%;font-size:16px">🌱</span>';
+ else if(stage===1)decoration='<span style="position:absolute;top:-13px;left:34%;font-size:18px">🌿</span><span style="position:absolute;top:-8px;right:22%;font-size:12px">✨</span>';
+ else decoration='<span style="position:absolute;top:-17px;left:40%;font-size:21px">🌿</span><span style="position:absolute;top:-5px;right:12%;font-size:15px">⭐</span>';
+ var scale=stage===0?'0.88':stage===1?'1':'1.12';
+ return '<div style="position:relative;width:100%;height:100%;transform:scale('+scale+')">'+base.svg+decoration+'</div>';
+}
+function evolutionHTML(){
+ var p=goalProgress(),next=petStage()===0?30:(petStage()===1?70:100);
+ return `<div class="card"><div class="flex-between"><b>🌱 ${PIXEL_PETS[state.profile.pet].name} 成長進度</b><span class="stage-label">${stageName()}</span></div><div class="progress"><div style="width:${p}%"></div></div><div class="flex-between small"><span>目標進度 ${p.toFixed(1)}%</span><span>${p>=100?'目標完成！':'下一階段 '+next+'%'}</span></div><p class="small" style="margin-top:5px">${stageDescription()}</p><div class="evolution-note">寵物會根據你記錄的實際體重進度成長。體重短期波動不會令已解鎖的進化階段倒退。</div></div>`;
+}
+
+/* =========================
+   3. 食物資料庫
+========================= */
+
+var MEAL_DB={
+ rice:{name:'白飯（1碗）',kcal:280,keywords:['飯','白飯','米飯','rice','white rice']},
+ noodle:{name:'湯麵（菜＋蛋）',kcal:420,keywords:['麵','湯麵','米線','公仔麵','通粉','noodle','noodles']},
+ chicken:{name:'去皮海南雞飯',kcal:580,keywords:['海南雞','雞飯','燒味','叉燒飯','chicken']},
+ salad:{name:'香煎雞胸肉沙律',kcal:340,keywords:['沙律','菜','輕食','salad']},
+ soup:{name:'生菜魚肉湯',kcal:180,keywords:['湯','粥','皮蛋瘦肉粥']},
+ cha:{name:'港式常餐',kcal:620,keywords:['常餐','茶餐廳','快餐','意粉']},
+ friedrice:{name:'炒飯',kcal:700,keywords:['炒飯','揚州炒飯','干炒牛河','fried rice']},
+ bread:{name:'麵包／多士',kcal:250,keywords:['麵包','多士','三文治','bread','toast']},
+ fruit:{name:'水果',kcal:100,keywords:['生果','蘋果','香蕉','橙','fruit']},
+ pork:{name:'五花肉／東坡肉',kcal:650,keywords:['五花肉','東坡肉','紅燒肉','扣肉','pork','pork belly']},
+ egg:{name:'雞蛋',kcal:75,keywords:['雞蛋','煎蛋','炒蛋','水煮蛋','egg','eggs']},
+ fish:{name:'蒸魚',kcal:220,keywords:['蒸魚','魚柳','魚肉','fish']},
+ burger:{name:'漢堡包',kcal:500,keywords:['漢堡','burger']},
+ pizza:{name:'薄餅',kcal:285,keywords:['薄餅','pizza']},
+ fries:{name:'薯條',kcal:350,keywords:['薯條','炸薯條']},
+ milk:{name:'牛奶',kcal:150,keywords:['牛奶','奶']},
+ sushi:{name:'壽司',kcal:350,keywords:['壽司','sushi']},
+ beef:{name:'牛肉',kcal:250,keywords:['牛肉','牛扒','牛柳','beef','steak']},
+ vegetables:{name:'蔬菜',kcal:80,keywords:['蔬菜','菜心','西蘭花','生菜','vegetables','vegetable','broccoli']}
+};
+
+var FOODS={
+ onigiri:{name:'飯糰',cost:1,exp:1,pal:['#4a4a55','#fbfaf5','#2f3b2f'],g:['...00...','..0110..','.011110.','.011110.','01111110','01222210','02222220','.000000.']},
+ bread:{name:'麵包',cost:1,exp:1,pal:['#6b4a2b','#d9a05b','#f0c98a'],g:['..0000..','.011110.','01122110','01111110','01221110','01111110','.000000.','........']},
+ cake:{name:'蛋糕',cost:2,exp:3,pal:['#6b3b3b','#e23b4b','#fff6f0','#f6d98a','#e87a8e'],g:['...11...','..0000..','.022220.','02222220','03333330','04444440','03333330','.000000.']}
+};
+Object.keys(FOODS).forEach(function(k){FOODS[k].svg=svgOf(FOODS[k])});
+
+/* =========================
+   4. 卡路里計算
+========================= */
+
+function getCalories(){
+ var p=state.profile;
+ var bmr=10*p.weight+6.25*p.height-5*p.age-161;
+ var mult={'0':1.2,'1-3':1.375,'3-5':1.55,'6-7':1.725};
+ var tdee=bmr*(mult[p.exercise]||1.375),target=tdee;
+ if(p.goal==='loss')target-=400;
+ if(p.goal==='gain')target+=300;
+ return Math.max(1200,Math.round(target));
+}
+function totalCalories(){
+ return state.meals.reduce(function(sum,m){return sum+Math.round(m.kcal*(m.portion||1))},0);
+}
+function autoPredictCalories(value){
+ var el=document.getElementById('textKcalInput');if(!el)return;
+ var v=value.trim().toLowerCase();if(!v){el.value=400;return}
+ var found=null;
+ Object.keys(MEAL_DB).some(function(k){
+  if(MEAL_DB[k].keywords.some(function(w){return v.includes(w.toLowerCase())})){found=MEAL_DB[k].kcal;return true}
+  return false;
+ });
+ el.value=found||550;
+}
+
+/* =========================
+   5. CNN 食物圖片分類
+   只辨認：東坡肉、沙律
+========================= */
+
+/* 將以下網址換成你訓練好的 Teachable Machine 模型網址。
+   模型必須只有兩個類別：
+   1. 東坡肉
+   2. 沙律
+   未設定網址時，仍可上載圖片及手動選擇食物。 */
+
+var AI_MODEL_URL='';
+
+var foodCNNModel=null;
+var cnnLoadingPromise=null;
+
+/* 只保留東坡肉及沙律的分類對照 */
+var CNN_CLASS_MAP={
+ '東坡肉':'pork',
+ '紅燒五花肉':'pork',
+ '五花肉':'pork',
+ '紅燒肉':'pork',
+ '扣肉':'pork',
+ 'pork':'pork',
+ 'pork belly':'pork',
+ 'dongpo pork':'pork',
+
+ '沙律':'salad',
+ '蔬菜沙律':'salad',
+ '雞胸肉沙律':'salad',
+ 'salad':'salad',
+ 'vegetable salad':'salad'
+};
+
+function normalizeCNNLabel(label){
+ return String(label||'').trim().toLowerCase().replace(/[_-]/g,' ').replace(/\s+/g,' ');
+}
+
+async function loadFoodCNN(){
+ if(foodCNNModel)return foodCNNModel;
+
+ if(!AI_MODEL_URL){
+  state.aiStatus='未設定模型';
+  state.aiError='圖片已成功上載。要啟用 AI 辨認，請先設定 AI_MODEL_URL；你仍可使用手動選擇食物。';
+  throw new Error(state.aiError);
+ }
+
+ if(!window.tmImage){
+  state.aiStatus='套件載入失敗';
+  state.aiError='AI 套件未能載入，請檢查網絡連線。';
+  throw new Error(state.aiError);
+ }
+
+ if(!cnnLoadingPromise){
+  cnnLoadingPromise=(async function(){
+   state.aiStatus='正在載入 CNN 模型...';
+   state.aiError='';
+   var modelURL=AI_MODEL_URL.replace(/\/?$/,'/');
+   var model=await tmImage.load(modelURL+'model.json',modelURL+'metadata.json');
+   foodCNNModel=model;
+   state.aiStatus='CNN 模型已載入';
+   return model;
+  })();
+ }
+
+ try{return await cnnLoadingPromise}
+ catch(error){
+  cnnLoadingPromise=null;
+  foodCNNModel=null;
+  state.aiStatus='模型載入失敗';
+  state.aiError=error.message||'無法載入模型';
+  throw error;
+ }
+}
+
+/* 只接受 pork 或 salad，而且信心分數必須達到 70% */
+async function predictFoodWithCNN(img){
+ var model=await loadFoodCNN();
+ var predictions=await model.predict(img);
+
+ var results=predictions.map(function(item){
+  var originalLabel=item.className;
+  var normalizedLabel=normalizeCNNLabel(originalLabel);
+  var foodId=CNN_CLASS_MAP[normalizedLabel];
+
+  return {
+   label:originalLabel,
+   id:foodId||null,
+   confidence:Number(item.probability||0)
+  };
+ });
+
+ var validResults=results.filter(function(item){
+  return (
+   (item.id==='pork'||item.id==='salad') &&
+   item.confidence>=0.70
+  );
+ });
+
+ validResults.sort(function(a,b){
+  return b.confidence-a.confidence;
+ });
+
+ state.aiStatus=validResults.length?'CNN 辨認完成':'未能確認是東坡肉或沙律';
+
+ return validResults;
+}
+
+function loadImage(src){
+ return new Promise(function(resolve,reject){
+  var img=new Image();
+  img.onload=function(){resolve(img)};
+  img.onerror=function(){reject(new Error('瀏覽器無法讀取這張圖片。請嘗試 JPG 或 PNG 格式。'))};
+  img.src=src;
+ });
+}
+
+/* =========================
+   6. 畫面
+========================= */
+
+function render(){
+ var app=document.getElementById('app'),html='';
+
+ if(state.step===1){
+  html=`
+  <div class="text-center">
+   <p class="small">PARADISE TAMAGOTCHI</p>
+   <h2 style="font-size:22px;margin:5px">NUTRIPET</h2>
+   <p class="small">健食隨身寶</p>
+   <div class="pet-avatar">${petSVG()}</div>
+   <p class="small">你嘅健康生活小夥伴</p>
+  </div>
+  <div class="card">
+   <div class="card-title">EMAIL 帳戶登入／註冊</div>
+   <label class="small">EMAIL 帳號</label>
+   <input type="email" id="loginEmail" value="${state.email}" placeholder="user@example.com">
+   <label class="small">PASSWORD 密碼</label>
+   <input type="password" id="loginPassword" placeholder="輸入密碼">
+   <button onclick="doLogin()">NEXT（填寫個人資料） &gt;</button>
+   <p class="small muted" style="margin-top:6px">示範版本：目前未連接真正帳戶系統。</p>
+  </div>`;
+ }
+ else if(state.step===2){
+  html=`
+  <div class="card-title">SETUP TRAINER PROFILE（個人資料）</div>
+  <div style="overflow-y:auto;max-height:360px;padding-right:3px">
+   <label class="small">暱稱 NAME</label>
+   <input id="pName" value="${state.profile.name}">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+    <div><label class="small">現時體重 kg</label><input type="number" id="pWeight" value="${state.profile.weight}"></div>
+    <div><label class="small">目標體重 kg</label><input type="number" id="pTarget" value="${state.profile.targetWeight}"></div>
+    <div><label class="small">身高 cm</label><input type="number" id="pHeight" value="${state.profile.height}"></div>
+    <div><label class="small">年齡</label><input type="number" id="pAge" value="${state.profile.age}"></div>
+   </div>
+   <label class="small">每週運動習慣</label>
+   <select id="pExercise">
+    <option value="0">久坐少動</option>
+    <option value="1-3" selected>輕度運動（每週 1–3 次）</option>
+    <option value="3-5">中度運動（每週 3–5 次）</option>
+    <option value="6-7">高強度運動（每週 6–7 次）</option>
+   </select>
+   <label class="small">主要目標</label>
+   <select id="pGoal">
+    <option value="loss">減脂／減肥</option>
+    <option value="maintain">維持體重</option>
+    <option value="gain">增肌／增重</option>
+   </select>
+   <div class="card-title" style="margin-top:8px">選擇你的電子寵物</div>
+   <div class="pet-grid">
+    ${Object.keys(PIXEL_PETS).map(function(k){
+     return `<div class="pet-choice ${state.profile.pet===k?'selected':''}" onclick="selectPet('${k}')">${PIXEL_PETS[k].svg}<div class="small">${PIXEL_PETS[k].name}</div></div>`;
+    }).join('')}
+   </div>
+  </div>
+  <button onclick="saveProfile()">CONFIRM & ENTER GAME &gt;</button>`;
+ }
+ else{
+  var targetKcal=getCalories(),total=totalCalories();
+  var hasB=state.meals.some(function(m){return m.type==='breakfast'});
+  var hasL=state.meals.some(function(m){return m.type==='lunch'});
+  var hasD=state.meals.some(function(m){return m.type==='dinner'});
+  var allMeals=hasB&&hasL&&hasD,calorieOK=total>0&&total<=targetKcal;
+  var canStamp=allMeals&&calorieOK;
+  var activePet=PIXEL_PETS[state.profile.pet],content='';
+
+  if(state.tab==='home'){
+   var rows=state.meals.length?state.meals.map(function(m){
+    var label={breakfast:'早餐',lunch:'午餐',dinner:'晚餐',snack:'小食'}[m.type];
+    return `<div class="flex-between small" style="padding:4px 0;border-bottom:1px dashed #8b9c86"><span>${label}｜${m.name}</span><b>${Math.round(m.kcal*m.portion)} kcal</b></div>`;
+   }).join(''):'<p class="small muted text-center">今日尚未記錄餐點</p>';
+
+   var message=total>targetKcal?'哎呀！今日食多咗少少喎，聽日記得均衡飲食，唔好亂咁節食呀！':total>0?'做得好！繼續保持均衡飲食，寵物同你一齊努力！':'今日仲未開始記錄食物，等緊你返嚟呀！';
+
+   content=`
+   <div class="card text-center"><div class="pet-avatar">${petSVG()}</div><div style="font-weight:bold">${activePet.name} · ${stageName()}</div><p class="small" style="margin-top:5px">${message}</p><p class="small muted">目標進度：${goalProgress().toFixed(1)}%</p></div>
+   ${evolutionHTML()}
+   <div class="card"><div class="flex-between small"><b>今日卡路里</b><b>${total} / ${targetKcal} kcal</b></div><div class="progress"><div style="width:${Math.min(100,total/targetKcal*100)}%;background:${total>targetKcal?'#c66b63':'#6b9b65'}"></div></div><p class="small muted">每日熱量目標只作估算，實際需要因人而異。</p></div>
+   <div class="card"><div class="card-title">今日飲食紀錄</div>${rows}</div>`;
+  }
+
+  else if(state.tab==='scan'){
+   if(!state.previewImg){
+    content=`
+    <div class="card">
+     <div class="card-title">1. 選擇餐別</div>
+     <select id="mealSelectType">
+      <option value="breakfast">早餐 Breakfast</option>
+      <option value="lunch">午餐 Lunch</option>
+      <option value="dinner">晚餐 Dinner</option>
+      <option value="snack">小食 Snack</option>
+     </select>
+     <div class="card-title">2. 拍攝或上載食物圖片</div>
+     <label class="upload-label">
+      📷 拍攝／從相簿選擇食物圖片
+      <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
+     </label>
+     <p class="upload-status muted">按上方按鈕選擇圖片。支援手機相簿及相機。建議使用 JPG 或 PNG。</p>
+     <p class="small muted">目前 AI 相片辨認只支援東坡肉及沙律。</p>
+    </div>
+    <div class="card">
+     <div class="card-title">3. 文字輸入食物</div>
+     <input id="textMealInput" placeholder="例如：海南雞飯、炒飯、蘋果" oninput="autoPredictCalories(this.value)">
+     <label class="small">預測卡路里 kcal</label>
+     <input type="number" id="textKcalInput" value="400" min="0">
+     <label class="small">份量倍數</label>
+     <input type="number" id="textPortionInput" value="1" step="0.5" min="0.5" max="5">
+     <button onclick="submitTextMeal()">確認文字記錄</button>
+    </div>`;
+   }
+   else{
+    content=`
+    <div class="card text-center">
+     <div class="card-title">食物圖片預覽</div>
+     <img class="photo-preview" src="${state.previewImg}" alt="食物預覽">
+     <p class="small">請選擇最接近圖片的食物，確認後才會計入卡路里。</p>
+     <div class="card-title" style="margin-top:8px">CNN AI 食物辨認結果</div>
+     <p class="small">模型狀態：${state.aiStatus}</p>
+     ${state.aiError?`<p class="small bad" style="margin-top:5px">${state.aiError}</p>`:''}
+
+     ${(state.candidates||[]).map(function(item){
+      var f=MEAL_DB[item.id],percent=item.confidence*100;
+      return `<div class="food-option"><span style="flex:1"><b>${f.name}</b><br><span class="small">AI 類別：${item.label}</span><br><span class="small">Confidence Score：${percent.toFixed(1)}%</span><div class="confidence-bar"><div style="width:${percent}%"></div></div><b>${f.kcal} kcal（基礎估算）</b></span><button onclick="pickFood('${item.id}')">選擇</button></div>`;
+     }).join('')}
+
+     ${state.candidates.length===0?'<p class="small muted">模型只會識別東坡肉或沙律。若圖片不是這兩款食物，或信心分數不足 70%，便不會顯示 AI 辨認結果。你仍可在下面手動選擇食物。</p>':''}
+
+     <div class="card-title" style="margin-top:8px">手動選擇食物</div>
+     <select id="manualFood">
+      ${Object.keys(MEAL_DB).map(function(id){return `<option value="${id}">${MEAL_DB[id].name}｜${MEAL_DB[id].kcal} kcal</option>`}).join('')}
+     </select>
+     <button onclick="pickManualFood()">使用手動選擇</button>
+
+     ${state.scanResult?`
+      <div class="card" style="margin-top:8px;background:#edf3eb">
+       <b>目前選擇：${state.scanResult.name}</b>
+       <p class="small">基礎熱量：${state.scanResult.kcal} kcal</p>
+       <p class="small">AI 類別：${state.scanResult.aiLabel||'手動選擇'}</p>
+       <p class="small">Confidence Score：${state.scanResult.confidence===null||state.scanResult.confidence===undefined?'不適用（手動選擇）':(state.scanResult.confidence*100).toFixed(1)+'%'}</p>
+       <label class="small">份量倍數</label>
+       <input type="number" id="photoPortion" value="${state.portion}" min="0.25" max="5" step="0.25" onchange="changePortion(this.value)">
+       <p class="small">估算總熱量：<b>${Math.round(state.scanResult.kcal*state.portion)} kcal</b></p>
+       <button onclick="confirmMeal()">確認並記錄餐點</button>
+      </div>`:''}
+     <button style="background:#94a3b8" onclick="resetScan()">重新上載圖片</button>
+    </div>`;
+   }
+  }
+
+  else if(state.tab==='water'){
+   var rec=Math.round(state.profile.currentWeight*33);
+   content=`
+   <div class="card text-center">
+    <div class="card-title">💧 每日飲水追蹤</div>
+    <h2 style="font-size:23px;margin:8px">${state.water} ml</h2>
+    <p class="small">參考飲水量：${rec} ml／日</p>
+    <p class="small muted">實際需要會因天氣、活動量及身體狀況而不同。</p>
+    <div class="progress"><div style="width:${Math.min(100,state.water/rec*100)}%"></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+     <button onclick="addWater(150)">小茶杯 +150ml</button><button onclick="addWater(250)">玻璃杯 +250ml</button>
+     <button onclick="addWater(500)">樽裝水 +500ml</button><button onclick="addWater(750)">大水樽 +750ml</button>
+    </div>
+    ${state.waterRewarded?'<p class="good small" style="margin-top:7px">今日飲水獎勵已領取！</p>':''}
+    <button style="background:#94a3b8" onclick="resetWater()">RESET WATER</button>
+   </div>`;
+  }
+
+  else if(state.tab==='goal'){
+   var p=goalProgress(),current=Number(state.profile.currentWeight),target=Number(state.profile.targetWeight);
+   var diff=Math.abs(current-target),weeklyRate=.4;
+   var weeks=diff<.05?0:Math.ceil(diff/weeklyRate),rows='';
+   for(var w=1;w<=8;w++){
+    var direction=target<current?-1:1;
+    var estimated=current+direction*Math.min(diff,w*weeklyRate);
+    rows+=`<tr><td>第 ${w} 週</td><td>${estimated.toFixed(1)} kg</td><td>${w*7} 日</td></tr>`;
+   }
+   content=`
+   <div class="card"><div class="card-title">📋 今日打卡條件</div>
+    <p class="small ${allMeals?'good':'bad'}">${allMeals?'✓':'✗'} 早餐、午餐、晚餐均已記錄</p>
+    <p class="small ${calorieOK?'good':'bad'}">${calorieOK?'✓':'✗'} 今日卡路里：${total} / ${targetKcal} kcal</p>
+    <p class="small muted" style="margin-top:5px">達成以上條件即可領取星星及經驗值。唔需要為了打卡而挨餓。</p>
+   </div>
+   <div class="card text-center"><div class="card-title">🗓️ 7天打卡週曆</div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">
+     ${['一','二','三','四','五','六','日'].map(function(d,i){return `<div style="background:#fff;border:1px solid #5c7356;border-radius:4px;padding:5px 0"><div class="small">${d}</div><b class="small">${i+1===state.day&&state.stamped?'✓':'·'}</b></div>`}).join('')}
+    </div>
+    <button onclick="handleStamp()" ${state.stamped||!canStamp?'disabled':''}>${state.stamped?'今日已打卡':canStamp?'蓋上今日印章 +2 ⭐':'未符合打卡條件'}</button>
+   </div>
+   <div class="card"><div class="card-title">⚖️ 每週體重更新</div>
+    <p class="small">目前記錄體重：${current.toFixed(1)} kg</p>
+    <label class="small">輸入最新體重（kg）</label>
+    <input type="number" id="newWeight" min="1" max="500" step="0.1" value="${current.toFixed(1)}">
+    <button onclick="saveWeight()">更新體重及寵物成長進度</button>
+    <p class="small muted">建議每週在相近時間及相似條件下量度，避免單日波動影響判斷。</p>
+   </div>
+   <div class="card"><div class="card-title">🌱 目標進度及寵物進化</div><div class="flex-between small"><b>${stageName()}</b><b>${p.toFixed(1)}%</b></div><div class="progress"><div style="width:${p}%"></div></div><p class="small">${stageDescription()}</p></div>
+   <div class="card"><div class="card-title">📅 預計目標周期</div>
+    <p class="small">目前距離目標：${diff.toFixed(1)} kg</p>
+    <p class="small">以每週約 0.4 kg 作示範估算，約需 ${weeks} 週。</p>
+    <p class="small muted">只屬粗略計劃，實際速度因人而異；維持體重目標則不適用。</p>
+    <div class="card-title" style="margin-top:8px">每週計劃表（估算）</div>
+    <div class="week-table"><table><thead><tr><th>周期</th><th>預計體重</th><th>日數</th></tr></thead><tbody><tr><td>目前</td><td>${current.toFixed(1)} kg</td><td>現在</td></tr>${rows}</tbody></table></div>
+   </div>`;
+  }
+
+  else if(state.tab==='pet'){
+   content=`
+   <div class="card text-center">
+    <div class="pet-room"><div class="pet-walker" id="petWalker"><div class="pet-bob" id="petBob"><div class="sprite" id="petSprite" style="height:65px;width:75px">${petSVG()}<div class="mouth" id="petMouth" style="top:55%"></div></div></div><div class="food" id="foodSlot"></div><div class="pop" id="popFx"></div></div><div class="ground"></div>
+    <b>${activePet.name}｜${stageName()}</b><p class="small">EXP：${state.exp} / 10</p><p class="small">成長進度：${goalProgress().toFixed(1)}%</p>
+   </div>
+   ${evolutionHTML()}
+   <div class="card"><div class="card-title">🐾 你的寵物</div><div class="pet-grid">
+    ${Object.keys(PIXEL_PETS).map(function(k){return `<div class="pet-choice ${state.profile.pet===k?'selected':''}" onclick="selectPet('${k}')">${PIXEL_PETS[k].svg}<div class="small">${PIXEL_PETS[k].name}</div></div>`}).join('')}
+   </div><p class="small muted" style="margin-top:5px">每種動物都可以經歷幼幼態、成長態及完全體。</p></div>
+   <div class="card"><div class="card-title">SHOP｜擁有 ${state.stars} ⭐</div>
+    ${Object.keys(FOODS).map(function(k){return `<div class="flex-between" style="font-size:11px;margin-bottom:7px"><span style="display:flex;align-items:center;gap:5px"><span style="width:25px;height:25px">${FOODS[k].svg}</span>${FOODS[k].name}（EXP +${FOODS[k].exp}）</span><button style="width:auto;padding:5px 9px" onclick="feedPet('${k}')">${FOODS[k].cost} ⭐ 餵食</button></div>`}).join('')}
+   </div>`;
+  }
+
+  html=`
+   <div class="flex-between" style="font-size:11px;font-weight:bold;border-bottom:1px solid #5c7356;padding-bottom:5px">
+    <span>DAY ${state.day} / 7</span>
+    <span>⭐ ${state.stars}　<span style="cursor:pointer;text-decoration:underline" onclick="handleLogout()">登出</span></span>
+   </div>
+   <div style="flex:1;margin:7px 0;overflow-y:auto">${content}</div>
+   <div class="nav">
+    <button class="${state.tab==='home'?'active':''}" onclick="switchTab('home')">主頁</button>
+    <button class="${state.tab==='scan'?'active':''}" onclick="switchTab('scan')">影相</button>
+    <button class="${state.tab==='water'?'active':''}" onclick="switchTab('water')">飲水</button>
+    <button class="${state.tab==='goal'?'active':''}" onclick="switchTab('goal')">打卡</button>
+    <button class="${state.tab==='pet'?'active':''}" onclick="switchTab('pet')">寵物</button>
+   </div>`;
+ }
+ app.innerHTML=html;
+}
+
+/* =========================
+   7. 登入及個人資料
+========================= */
+
+window.doLogin=function(){
+ var el=document.getElementById('loginEmail');
+ if(!el||!el.value.trim()){alert('請輸入 Email！');return}
+ state.email=el.value.trim();state.step=2;render();
+};
+window.selectPet=function(k){if(state.eating)return;state.profile.pet=k;render()};
+window.saveProfile=function(){
+ var v=function(id){return document.getElementById(id).value};
+ var weight=Number(v('pWeight')),target=Number(v('pTarget')),height=Number(v('pHeight')),age=Number(v('pAge'));
+ if(!weight||!target||!height||!age||weight<=0||target<=0){alert('請輸入正確的個人資料及體重。');return}
+ state.profile.name=v('pName')||'PLAYER 1';
+ state.profile.weight=weight;state.profile.startWeight=weight;state.profile.currentWeight=weight;
+ state.profile.targetWeight=target;state.profile.height=height;state.profile.age=age;
+ state.profile.exercise=v('pExercise');state.profile.goal=v('pGoal');
+ state.profile.bestProgress=rawProgress();state.step=3;render();
+};
+window.handleLogout=function(){if(state.eating)return;if(confirm('確定要登出嗎？')){state.step=1;render()}};
+window.switchTab=function(t){if(state.eating)return;state.tab=t;render()};
+
+/* =========================
+   8. 體重更新
+========================= */
+
+window.saveWeight=function(){
+ var el=document.getElementById('newWeight'),n=Number(el&&el.value);
+ if(!n||n<1||n>500){alert('請輸入有效體重。');return}
+ var oldStage=petStage();
+ state.profile.currentWeight=n;
+ state.weightLog.push({day:state.day,weight:n,date:new Date().toLocaleDateString()});
+ var progress=rawProgress();
+ state.profile.bestProgress=Math.max(state.profile.bestProgress||0,progress);
+ var newStage=petStage();
+ if(newStage>oldStage)alert('🎉 恭喜！你嘅努力令寵物進化成「'+stageName()+'」！');
+ else alert('體重紀錄已更新！寵物會繼續陪你努力。');
+ render();
+};
+
+/* =========================
+   9. 相片上載及 CNN 辨認
+========================= */
+
+window.handleFileSelect=async function(event){
+ var input=event.target;
+ var file=input.files&&input.files[0];
+ if(!file)return;
+
+ var allowed=/^image\//i.test(file.type)||/\.(jpg|jpeg|png|webp|gif|heic|heif)$/i.test(file.name);
+ if(!allowed){
+  alert('請選擇圖片檔案，例如 JPG、PNG 或 WebP。');
+  input.value='';
+  return;
+ }
+ if(file.size>12*1024*1024){
+  alert('圖片太大，請選擇 12MB 以下的圖片。');
+  input.value='';
+  return;
+ }
+
+ var mealSelect=document.getElementById('mealSelectType');
+ if(mealSelect)state.mealType=mealSelect.value;
+
+ state.previewImg=null;
+ state.portion=1;
+ state.scanResult=null;
+ state.candidates=[];
+ state.aiStatus='正在讀取圖片...';
+ state.aiError='';
+ render();
+
+ var reader=new FileReader();
+
+ reader.onload=function(e){
+  if(!e.target||!e.target.result){
+   state.aiStatus='圖片讀取失敗';
+   state.aiError='無法讀取圖片，請重新選擇。';
+   render();
+   return;
+  }
+  state.previewImg=e.target.result;
+  state.aiStatus='圖片已上載，準備辨認...';
+  state.aiError='';
+  render();
+  runCNNForUploadedImage(state.previewImg);
+ };
+
+ reader.onerror=function(){
+  state.aiStatus='圖片讀取失敗';
+  state.aiError='瀏覽器讀取圖片時發生錯誤，請重新選擇 JPG 或 PNG 圖片。';
+  render();
+ };
+
+ reader.onabort=function(){
+  state.aiStatus='圖片讀取已取消';
+  state.aiError='請重新選擇圖片。';
+  render();
+ };
+
+ try{
+  reader.readAsDataURL(file);
+ }catch(error){
+  state.aiStatus='圖片讀取失敗';
+  state.aiError=error.message||'無法讀取圖片。';
+  render();
+ }
+
+ input.value='';
+};
+
+async function runCNNForUploadedImage(imageData){
+ try{
+  var img=await loadImage(imageData);
+  var results=await predictFoodWithCNN(img);
+  state.candidates=results;
+
+  if(results.length===0){
+   state.aiStatus='未能確認是東坡肉或沙律';
+   state.aiError='AI 只支援東坡肉及沙律，或辨認信心未達 70%。你可以在下面手動選擇食物。';
+  }
+  render();
+ }catch(error){
+  state.aiStatus='圖片已上載；CNN 未能辨認';
+  state.aiError=error.message||'模型發生錯誤。你仍可手動選擇食物。';
+  console.error('CNN error:',error);
+  render();
+ }
+}
+
+window.pickFood=function(id){
+ if(!MEAL_DB[id])return;
+ var result=(state.candidates||[]).find(function(item){return item.id===id});
+ state.scanResult={
+  id:id,name:MEAL_DB[id].name,kcal:MEAL_DB[id].kcal,
+  confidence:result?result.confidence:null,
+  aiLabel:result?result.label:'手動選擇'
+ };
+ state.portion=1;render();
+};
+
+window.pickManualFood=function(){
+ var el=document.getElementById('manualFood');
+ if(el){
+  state.scanResult={
+   id:el.value,name:MEAL_DB[el.value].name,kcal:MEAL_DB[el.value].kcal,
+   confidence:null,aiLabel:'手動選擇'
+  };
+  state.portion=1;render();
+ }
+};
+
+window.changePortion=function(v){
+ var n=Number(v);
+ if(!n||n<0.25||n>5){alert('份量請輸入 0.25 至 5 倍。');return}
+ state.portion=n;
+ var el=document.getElementById('photoPortion');
+ if(el)el.value=n;
+};
+
+window.confirmMeal=function(){
+ if(!state.scanResult)return;
+ state.meals.push({
+  type:state.mealType,name:state.scanResult.name,kcal:state.scanResult.kcal,
+  portion:state.portion,aiLabel:state.scanResult.aiLabel||'手動選擇',
+  confidence:state.scanResult.confidence===null||state.scanResult.confidence===undefined?null:state.scanResult.confidence
+ });
+ var confidenceText=state.scanResult.confidence===null||state.scanResult.confidence===undefined?'':'\nAI 信心分數：'+(state.scanResult.confidence*100).toFixed(1)+'%';
+ alert('成功記錄 '+state.scanResult.name+'，估算 '+Math.round(state.scanResult.kcal*state.portion)+' kcal。'+confidenceText);
+ state.previewImg=null;state.scanResult=null;state.candidates=[];state.tab='home';render();
+};
+
+window.resetScan=function(){
+ state.previewImg=null;state.scanResult=null;state.candidates=[];
+ state.aiError='';state.aiStatus='未載入模型';state.portion=1;render();
+};
+
+window.submitTextMeal=function(){
+ var name=document.getElementById('textMealInput')?.value.trim();
+ var kcal=Number(document.getElementById('textKcalInput')?.value);
+ var portion=Number(document.getElementById('textPortionInput')?.value);
+ if(!name){alert('請輸入食物名稱！');return}
+ if(!Number.isFinite(kcal)||kcal<0){alert('請輸入有效卡路里。');return}
+ if(!Number.isFinite(portion)||portion<=0||portion>5){alert('請輸入有效份量。');return}
+ state.mealType=document.getElementById('mealSelectType')?.value||state.mealType;
+ state.meals.push({type:state.mealType,name:name,kcal:kcal,portion:portion});
+ alert('成功記錄 '+name+'，約 '+Math.round(kcal*portion)+' kcal。');
+ state.tab='home';render();
+};
+
+/* =========================
+   10. 飲水
+========================= */
+
+window.addWater=function(amount){
+ state.water+=amount;
+ if(state.water>=2000&&!state.waterRewarded){state.waterRewarded=true;state.stars+=1;alert('💧 太棒了！獲得 ⭐ +1！')}
+ render();
+};
+window.resetWater=function(){state.water=0;state.waterRewarded=false;render()};
+
+/* =========================
+   11. 打卡
+========================= */
+
+window.handleStamp=function(){
+ if(state.stamped){alert('今日已經打卡！');return}
+ var total=totalCalories(),target=getCalories();
+ var b=state.meals.some(function(m){return m.type==='breakfast'});
+ var l=state.meals.some(function(m){return m.type==='lunch'});
+ var d=state.meals.some(function(m){return m.type==='dinner'});
+ if(!(b&&l&&d&&total>0&&total<=target)){alert('請先記錄早餐、午餐、晚餐，並留意每日飲食目標。');return}
+ state.stamped=true;state.stars+=2;state.exp+=2;
+ alert('🎉 打卡成功！獲得 +2 ⭐ 星星！');render();
+};
+
+/* =========================
+   12. 餵食及動畫
+========================= */
+
+window.feedPet=function(key){
+ var f=FOODS[key];
+ if(state.eating)return;
+ if(state.stars<f.cost){alert('星星不足！先完成打卡或飲水任務啦！');return}
+ state.stars-=f.cost;startEat(key);
+};
+
+window.startEat=function(key){
+ var f=FOODS[key];
+ var walker=document.getElementById('petWalker');
+ var bob=document.getElementById('petBob');
+ var food=document.getElementById('foodSlot');
+ var mouth=document.getElementById('petMouth');
+ var sprite=document.getElementById('petSprite');
+ var pop=document.getElementById('popFx');
+
+ if(!walker||!bob||!food||!mouth||!sprite||!pop){state.eating=false;render();return}
+
+ state.eating=true;
+ walker.classList.add('paused');bob.classList.add('paused');
+ food.innerHTML=f.svg;food.className='food fall';
+
+ var seq=[
+  [700,function(){mouth.className='mouth open'}],
+  [900,function(){mouth.className='mouth chew';sprite.classList.add('chewing')}],
+  [1500,function(){food.style.transform='scale(.7)'}],
+  [2100,function(){food.style.transform='scale(.4)'}],
+  [2700,function(){food.style.transform='scale(.15)'}],
+  [3200,function(){food.className='food';mouth.className='mouth';sprite.classList.remove('chewing');sprite.classList.add('gulp')}],
+  [3800,function(){sprite.classList.remove('gulp');pop.textContent='♥ EXP +'+f.exp;pop.className='pop show'}],
+  [4800,function(){state.exp+=f.exp;state.eating=false;render()}]
+ ];
+ seq.forEach(function(s){setTimeout(function(){try{s[1]()}catch(e){}},s[0])});
+};
+
+/* =========================
+   13. 開始
+========================= */
+
+render();
+
+</script>
+</body>
+</html>
